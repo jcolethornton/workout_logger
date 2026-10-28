@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>
+  :root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+  body{margin:0}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+<title>HIT Logger</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  /* Layout: phone-first workout logger. Sticky header + A/B toggle + live volume; scrollable exercise list with per-set input rows; fixed rest-timer bar at the bottom. */
+  :root{
+    --bg:#f3f4f6; --surface:#ffffff; --surface-2:#eceef1; --fg:#191c20; --muted:#5b636c;
+    --line:#dadee3; --accent:#cf3f26; --accent-soft:rgba(207,63,38,.11); --good:#1f7a52; --good-soft:rgba(31,122,82,.12);
+    --field:#ffffff; --field-line:#c6ccd3;
+    --display:"Oswald","Arial Narrow",sans-serif; --body:"Hanken Grotesk",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#111317; --surface:#1a1e23; --surface-2:#232830; --fg:#e8eaed; --muted:#99a1ab;
+    --line:#2b323b; --accent:#ff5a3c; --accent-soft:rgba(255,90,60,.15); --good:#3fbd85; --good-soft:rgba(63,189,133,.15);
+    --field:#0f1217; --field-line:#39414b; color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#111317; --surface:#1a1e23; --surface-2:#232830; --fg:#e8eaed; --muted:#99a1ab;
+    --line:#2b323b; --accent:#ff5a3c; --accent-soft:rgba(255,90,60,.15); --good:#3fbd85; --good-soft:rgba(63,189,133,.15);
+    --field:#0f1217; --field-line:#39414b; color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:96px}
+  .wrap{max-width:640px;margin:0 auto;padding-inline:16px;padding-block:0 32px}
+  h1,h2,h3{text-wrap:balance;margin:0}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  /* header */
+  header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .head-inner{max-width:640px;margin:0 auto;padding:12px 16px 10px}
+  .toprow{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .eyebrow{font-family:var(--display);text-transform:uppercase;letter-spacing:.16em;font-size:10.5px;font-weight:600;color:var(--accent)}
+  h1{font-family:var(--display);font-weight:700;font-size:21px;letter-spacing:.01em;line-height:1}
+  .vol{text-align:right;line-height:1}
+  .vol .n{font-family:var(--mono);font-weight:600;font-size:17px}
+  .vol .l{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:2px}
+  .toggle{display:flex;gap:6px;margin-top:10px;background:var(--surface-2);padding:4px;border-radius:11px}
+  .toggle button{flex:1;font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;font-weight:600;font-size:12.5px;color:var(--muted);background:transparent;border:0;padding:8px 6px;border-radius:8px;cursor:pointer;transition:.15s}
+  .toggle button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+  .toggle .mg{display:block;font-family:var(--body);text-transform:none;letter-spacing:0;font-weight:500;font-size:10px;color:var(--muted);margin-top:1px}
+
+  /* exercise cards */
+  .list{list-style:none;padding:0;margin:14px 0 0;display:flex;flex-direction:column;gap:10px}
+  .ex{background:var(--surface);border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .ex-top{display:grid;grid-template-columns:20px 1fr;gap:9px;padding:12px 13px 8px}
+  .idx{font-family:var(--display);font-weight:600;font-size:13px;color:var(--accent);padding-top:2px}
+  .ex-name{font-weight:600;font-size:14.5px;line-height:1.2}
+  .meta-line{margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .tech{font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;font-size:9px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:2px 6px;border-radius:5px}
+  .tgt{font-size:11px;color:var(--muted)}
+  .info-btn{margin-left:auto;background:transparent;border:1px solid var(--field-line);color:var(--muted);width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:700;cursor:pointer;line-height:1;font-family:var(--body)}
+  .ex-note{padding:0 13px 10px 42px;margin:0;color:var(--muted);font-size:12px}
+  .ex-note[hidden]{display:none}
+
+  /* set table */
+  .sets{padding:0 10px 8px}
+  .srow,.shead{display:grid;grid-template-columns:34px 1fr 1fr 1fr 40px;gap:6px;align-items:center}
+  .shead{padding:2px 3px 5px;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .shead span:nth-child(2),.shead span:nth-child(3),.shead span:nth-child(4){text-align:center}
+  .shead span:last-child{text-align:center}
+  .srow{padding:4px 3px}
+  .srow .tag{font-family:var(--display);font-weight:600;font-size:13px;text-align:center;color:var(--fg);background:transparent;border:0;padding:0;line-height:1}
+  button.tag{cursor:pointer}
+  button.tag:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:5px}
+  .srow .tag.fin{color:var(--accent);font-size:12px}
+  .srow.warm .tag{color:var(--muted);font-size:11px}
+  .prev{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center}
+  .srow input{width:100%;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;text-align:center;padding:7px 2px;border:1px solid var(--field-line);border-radius:8px;background:var(--field);color:var(--fg);-moz-appearance:textfield}
+  .srow input::-webkit-outer-spin-button,.srow input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .srow input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+  .check{width:34px;height:34px;justify-self:center;border:1.5px solid var(--field-line);background:var(--field);border-radius:9px;cursor:pointer;display:grid;place-items:center;padding:0}
+  .check svg{width:17px;height:17px;stroke:var(--muted);stroke-width:3;fill:none;opacity:.5}
+  .srow.done input{background:var(--good-soft);border-color:color-mix(in srgb,var(--good) 45%,transparent)}
+  .srow.done .check{background:var(--good);border-color:var(--good)}
+  .srow.done .check svg{stroke:#fff;opacity:1}
+  .setbtns{display:flex;gap:6px;margin:4px 3px 2px}
+  .addset{flex:1;background:var(--surface-2);border:0;color:var(--muted);font-family:var(--body);font-weight:600;font-size:12px;padding:8px;border-radius:8px;cursor:pointer}
+  .addset:active{transform:scale(.99)}
+  .addset:disabled{opacity:.4;cursor:default}
+
+  /* finish + actions */
+  .actions{margin-top:16px;display:flex;flex-direction:column;gap:8px}
+  .finish{font-family:var(--display);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-size:15px;color:#fff;background:var(--accent);border:0;border-radius:12px;padding:15px;cursor:pointer}
+  .finish:active{transform:scale(.995)}
+  .clear{background:transparent;border:0;color:var(--muted);font-size:12px;cursor:pointer;padding:6px;font-family:var(--body);text-decoration:underline}
+  .lastdone{font-size:12px;color:var(--good);text-align:center;font-weight:600}
+  .lastdone[hidden]{display:none}
+
+  /* rest timer bar */
+  .timer{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));box-shadow:0 -4px 16px rgba(0,0,0,.1)}
+  .timer[hidden]{display:none}
+  .timer-inner{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:12px}
+  .t-count{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:30px;line-height:1;min-width:92px}
+  .t-count.low{color:var(--accent)}
+  .t-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:block;margin-top:2px;font-family:var(--body);font-weight:600}
+  .t-btns{margin-left:auto;display:flex;gap:7px}
+  .t-btns button{font-family:var(--display);font-weight:600;font-size:13px;border:1px solid var(--field-line);background:var(--field);color:var(--fg);border-radius:9px;padding:9px 11px;cursor:pointer;min-width:46px}
+  .t-btns .skip{background:var(--accent);border-color:var(--accent);color:#fff}
+  .timer.done-flash .t-count{color:var(--good)}
+
+  /* reference accordion */
+  section.ref{margin-top:24px}
+  .ref-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;background:transparent;border:0;border-top:1px solid var(--line);padding:14px 2px;font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+  .ref-toggle .chev{transition:transform .2s}
+  .ref-toggle[aria-expanded="true"] .chev{transform:rotate(180deg)}
+  .ref-body[hidden]{display:none}
+  .hist-count{color:var(--muted);font-weight:600;font-size:12px;margin-left:4px}
+  .h-empty{font-size:13px;color:var(--muted);padding:2px 2px 6px}
+  .h-row{display:grid;grid-template-columns:62px 1fr auto;gap:10px;align-items:center;padding:9px 2px;border-bottom:1px solid var(--line)}
+  .h-row:last-of-type{border-bottom:0}
+  .h-date{font-size:11px;color:var(--muted);line-height:1.2}
+  .h-date b{display:block;font-size:13px;color:var(--fg);font-weight:600;font-family:var(--mono)}
+  .h-bar-wrap{min-width:0}
+  .h-wk{font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;font-size:11px;font-weight:600;color:var(--fg);margin-bottom:4px}
+  .h-wk .ab{display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:4px;background:var(--accent-soft);color:var(--accent);margin-right:5px;font-size:10px}
+  .h-bar{height:7px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+  .h-bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+  .h-vol{text-align:right;line-height:1.15}
+  .h-vol .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:14px}
+  .h-vol .s{display:block;font-size:10px;color:var(--muted)}
+  .cloud-help{font-size:12.5px;color:var(--muted);margin:2px 2px 10px;line-height:1.45}
+  .cloud-row{display:flex;gap:6px;margin-bottom:8px}
+  .cloud-row input{flex:1;min-width:0;font-family:var(--mono);font-size:11px;padding:9px 10px;border:1px solid var(--field-line);border-radius:9px;background:var(--field);color:var(--fg)}
+  .cloud-row input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+  .save-url{background:var(--accent);border:0;color:#fff;font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;font-weight:600;font-size:12px;padding:0 16px;border-radius:9px;cursor:pointer}
+  .cloud-actions{display:flex;gap:6px}
+  .cloud-actions .addset{flex:1}
+  .cloud-status{font-size:12px;color:var(--good);font-weight:600;margin:9px 2px 0;min-height:1.1em}
+  .glossary dt{font-family:var(--display);text-transform:uppercase;letter-spacing:.04em;font-size:12px;font-weight:600;color:var(--accent);margin-top:12px}
+  .glossary dt:first-child{margin-top:0}
+  .glossary dd{margin:3px 0 0;font-size:13px;color:var(--muted)}
+  .foot{margin-top:14px;font-size:11.5px;color:var(--muted)}
+  @media (min-width:520px){.glossary dl{columns:2;column-gap:26px}.glossary div{break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head-inner">
+    <div class="toprow">
+      <div>
+        <div class="eyebrow">HIT · every 4 days</div>
+        <h1 id="wk-title">Workout A</h1>
+      </div>
+      <div class="vol"><span class="n num" id="vol">0</span><span class="l">kg done</span></div>
+    </div>
+    <div class="toggle" role="tablist" aria-label="Choose workout">
+      <button role="tab" id="tab-a" aria-selected="true">Workout A<span class="mg">Press / Row / Squat</span></button>
+      <button role="tab" id="tab-b" aria-selected="false">Workout B<span class="mg">Pre-exhaust / RDL</span></button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <ul class="list" id="list" aria-live="polite"></ul>
+
+  <div class="actions">
+    <p class="lastdone" id="lastdone" hidden></p>
+    <button class="finish" id="finish">Finish &amp; save workout</button>
+    <button class="clear" id="clearbtn">Reset this workout's sets</button>
+  </div>
+
+  <section class="hist">
+    <button class="ref-toggle" id="hist-toggle" aria-expanded="false" aria-controls="hist-body">
+      <span>History <span class="hist-count num" id="hist-count"></span></span><span class="chev">▾</span>
+    </button>
+    <div class="ref-body" id="hist-body" hidden>
+      <div id="hist-list"></div>
+      <button class="clear" id="hist-clear" hidden>Clear all history</button>
+    </div>
+  </section>
+
+  <section class="cloud">
+    <button class="ref-toggle" id="cloud-toggle" aria-expanded="false" aria-controls="cloud-body">
+      <span>Cloud backup <span class="hist-count num" id="cloud-state"></span></span><span class="chev">▾</span>
+    </button>
+    <div class="ref-body" id="cloud-body" hidden>
+      <p class="cloud-help">Each time you tap <b>Finish &amp; save</b>, that session's sets append as rows to your Google Sheet. The URL is stored on this device — paste it on any other device you log from.</p>
+      <div class="cloud-row">
+        <input id="cloud-url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/…/exec">
+        <button class="save-url" id="cloud-save">Save</button>
+      </div>
+      <div class="cloud-actions">
+        <button class="addset" id="cloud-test">Send test row</button>
+        <button class="addset" id="cloud-resend">Re-send last</button>
+      </div>
+      <p class="cloud-status" id="cloud-status"></p>
+    </div>
+  </section>
+
+  <section class="ref">
+    <button class="ref-toggle" id="ref-toggle" aria-expanded="false" aria-controls="ref-body">
+      <span>Technique &amp; rest guide</span><span class="chev">▾</span>
+    </button>
+    <div class="ref-body" id="ref-body" hidden>
+      <div class="glossary">
+        <dl>
+          <div><dt>Rest between sets</dt><dd>Warm-ups: 45–60s. Working (failure) sets: 2–3 min. The timer auto-starts when you tick a set — warm-ups 60s, working sets 150s. If the next row is a finisher (F), it drops to a 20s rest-pause gap instead. Adjust with ±15s or skip.</dd></div>
+          <div><dt>Finisher sets</dt><dd>For rest-pause or drop sets: log your straight set at its true failure reps (e.g. 10), then tap <b>+ Finisher</b> to add an <b>F</b> row for the extra reps (e.g. 6) at the same weight. Keeps your working-set number clean for tracking while still counting the extra work. Tap any set number to flip it between working and F.</dd></div>
+          <div><dt>Rest-pause</dt><dd>Hit failure, rack it, breathe 15–20s, squeeze out 2–4 more at the same weight. Log those extra reps as a finisher (F) set.</dd></div>
+          <div><dt>Negatives</dt><dd>Lower the weight over 8–10s. Past failure, keep doing slow lowers for 2–3 more.</dd></div>
+          <div><dt>Static hold</dt><dd>At the hardest point, hold the contraction 10–20s after your last full rep.</dd></div>
+          <div><dt>Pre-exhaust</dt><dd>Isolation move to failure, then straight into the compound with no rest. (Second machine taken? Rest-pause the single machine, or use the bodyweight finisher.)</dd></div>
+          <div><dt>Technical failure</dt><dd>Barbell squat &amp; RDL only: stop when form slips — never grind a loaded bar past failure while training solo. No rest-pause or forced reps on these.</dd></div>
+        </dl>
+      </div>
+      <p class="foot">Loads seeded from your Hevy data through Oct 2026. Sets you log here are saved on this device only (works offline) and aren't synced — keep logging in Hevy if you want cross-device history. Training plan, not medical advice.</p>
+    </div>
+  </section>
+</div>
+
+<div class="timer" id="timer" hidden>
+  <div class="timer-inner">
+    <div><span class="t-count num" id="t-count">2:30</span><span class="t-label" id="t-label">Rest</span></div>
+    <div class="t-btns">
+      <button id="t-minus">−15</button>
+      <button id="t-plus">+15</button>
+      <button class="skip" id="t-skip">Skip</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- routine data (seeded from Hevy, Oct 2026) ---------- */
+const ROUTINES = {
+  a: { title:"Workout A", ex:[
+    {id:"a_chestpress", n:"Chest Press (Machine)", tech:"Rest-pause set 2", tgt:"6–10 reps", note:"Two all-out sets; rest-pause the second.",
+      sets:[{t:"W",w:20,r:10},{t:"W",w:35,r:6},{t:1,w:50,r:8},{t:2,w:50,r:8}]},
+    {id:"a_row", n:"Seated Row (Machine)", tech:"Rest-pause set 2", tgt:"6–10 reps", note:"Drive elbows back, full squeeze.",
+      sets:[{t:"W",w:30,r:8},{t:"W",w:45,r:5},{t:1,w:57,r:8},{t:2,w:57,r:8}]},
+    {id:"a_squat", n:"Squat (Barbell)", tech:"Technical failure", tgt:"8–12 reps", note:"Stop when form breaks — NOT past failure. No rest-pause/forced reps on a loaded bar solo.",
+      sets:[{t:"W",w:20,r:8},{t:"W",w:30,r:5},{t:1,w:40,r:10},{t:2,w:40,r:10}]},
+    {id:"a_legcurl", n:"Lying Leg Curl (Machine)", tech:"Negatives", tgt:"8–12 reps", note:"8–10s lowers past failure. Hips down.",
+      sets:[{t:"W",w:30,r:10},{t:1,w:50,r:10}]},
+    {id:"a_ohp", n:"Seated Shoulder Press (Machine)", tech:"Rest-pause", tgt:"6–10 reps", note:"One all-out set, then a rest-pause burst.",
+      sets:[{t:"W",w:20,r:8},{t:1,w:35,r:8}]},
+    {id:"a_lat", n:"Lateral Raise (Dumbbell)", tech:"Static hold", tgt:"10–15 reps", note:"Hold arms out at shoulder height 10–15s at failure.",
+      sets:[{t:1,w:12,r:12}]},
+    {id:"a_tri", n:"Triceps Pushdown", tech:"Rest-pause", tgt:"8–12 reps", note:"Elbows pinned. Rest-pause for 2–4 extra.",
+      sets:[{t:1,w:25,r:10}]},
+    {id:"a_curl", n:"EZ Bar Biceps Curl", tech:"Negatives", tgt:"8–12 reps", note:"No swing. Slow 6–8s lowers at failure.",
+      sets:[{t:1,w:25,r:8}]},
+    {id:"a_calf", n:"Standing Calf Raise (Machine)", tech:"Static hold", tgt:"10–15 reps", note:"Full stretch bottom; hold the top at failure.",
+      sets:[{t:"W",w:60,r:12},{t:1,w:108,r:12}]},
+    {id:"a_crunch", n:"Crunch", tech:"Static hold", tgt:"to failure", note:"Slow; hold the top squeeze on the last rep.",
+      sets:[{t:1,w:0,r:15}]}
+  ]},
+  b: { title:"Workout B", ex:[
+    {id:"b_pec", n:"Butterfly (Pec Deck)", tech:"Pre-exhaust ①", tgt:"~12 → fail", note:"To failure (~12), then straight into Chest Press, no rest. Chest Press taken? Rest-pause here, or push-ups to failure after.",
+      sets:[{t:"W",w:20,r:12},{t:"W",w:32,r:10},{t:1,w:42,r:12}]},
+    {id:"b_chestpress", n:"Chest Press (Machine)", tech:"Pre-exhaust ② — no rest", tgt:"to failure", note:"Straight from the Pec Deck, press to failure.",
+      sets:[{t:1,w:50,r:8}]},
+    {id:"b_lat", n:"Lat Pulldown (Cable)", tech:"Rest-pause set 2", tgt:"6–10 reps", note:"Lead with elbows, no leaning back.",
+      sets:[{t:"W",w:30,r:8},{t:"W",w:45,r:5},{t:1,w:56,r:8},{t:2,w:56,r:8}]},
+    {id:"b_legext", n:"Leg Extension (Machine)", tech:"Pre-exhaust ①", tgt:"~12 → fail", note:"To failure (~12), then straight into Leg Press. Leg Press taken? Rest-pause here, or walking lunges after.",
+      sets:[{t:"W",w:45,r:12},{t:"W",w:65,r:8},{t:1,w:88,r:12}]},
+    {id:"b_legpress", n:"Leg Press (Machine)", tech:"Pre-exhaust ② — no rest", tgt:"to failure", note:"Straight from the Leg Extension, press to failure.",
+      sets:[{t:"W",w:90,r:8},{t:"W",w:130,r:5},{t:1,w:175,r:8}]},
+    {id:"b_rdl", n:"Romanian Deadlift (Barbell)", tech:"Technical failure", tgt:"8–12 reps", note:"Hips back, soft knees, flat back. Stop when form slips — no past-failure techniques on a hinge.",
+      sets:[{t:"W",w:20,r:8},{t:1,w:40,r:10}]},
+    {id:"b_lat_r", n:"Lateral Raise (Dumbbell)", tech:"Static hold", tgt:"10–15 reps", note:"Hold at shoulder height 10–15s at failure.",
+      sets:[{t:1,w:12,r:12}]},
+    {id:"b_shrug", n:"Shrug (Dumbbell)", tech:"Static hold", tgt:"10–15 reps", note:"Squeeze & hold the top; static hold on the last.",
+      sets:[{t:1,w:48,r:12}]},
+    {id:"b_tri", n:"Overhead Triceps Ext. (Cable)", tech:"Negatives", tgt:"8–12 reps", note:"Elbows high and still. Slow lowers at failure.",
+      sets:[{t:1,w:19,r:12}]},
+    {id:"b_curl", n:"Rope Cable Curl", tech:"Rest-pause", tgt:"10–15 reps", note:"Spread the rope at the top. Rest-pause for extra.",
+      sets:[{t:1,w:16,r:12}]},
+    {id:"b_calf", n:"Calf Press (Machine)", tech:"Static hold", tgt:"10–15 reps", note:"Deep stretch; full hold at the top at failure.",
+      sets:[{t:"W",w:50,r:12},{t:1,w:85,r:12}]},
+    {id:"b_crunch", n:"Crunch", tech:"Static hold", tgt:"to failure", note:"Hold the top squeeze on your final rep.",
+      sets:[{t:1,w:0,r:15}]}
+  ]}
+};
+const REST = { warm:60, work:150, restpause:20 };
+
+/* ---------- storage helpers (safe) ---------- */
+const store = {
+  get(k,f){ try{const v=localStorage.getItem(k);return v?JSON.parse(v):f;}catch(e){return f;} },
+  set(k,v){ try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} }
+};
+
+/* progress: {a:{exId:[{w,r,done}]}, b:{...}}  |  last:{exId:[{w,r}]} */
+let progress = store.get('hit-progress', {a:{},b:{}});
+let last = store.get('hit-last', {});
+let history = store.get('hit-history', []);
+let lastPayload = store.get('hit-lastpayload', null);
+let current = store.get('hit-current', 'a');
+if(current!=='a'&&current!=='b') current='a';
+
+function routine(){ return ROUTINES[current]; }
+function progFor(exId){
+  const p = progress[current];
+  if(!p[exId]){
+    const ex = routine().ex.find(e=>e.id===exId);
+    p[exId] = ex.sets.map(s=>({w:(s.t!=='W' && last[exId] && last[exId][wIdx(ex,s)] )? last[exId][wIdx(ex,s)].w : s.w, r:s.r, done:false}));
+  }
+  return p[exId];
+}
+function wIdx(ex,set){ return ex.sets.indexOf(set); }
+
+/* ---------- rendering ---------- */
+const listEl = document.getElementById('list');
+const CHECK_SVG = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+function render(){
+  document.getElementById('wk-title').textContent = routine().title;
+  document.getElementById('tab-a').setAttribute('aria-selected', String(current==='a'));
+  document.getElementById('tab-b').setAttribute('aria-selected', String(current==='b'));
+  listEl.innerHTML='';
+  routine().ex.forEach((ex,i)=>{
+    const sets = progFor(ex.id);
+    const li=document.createElement('li'); li.className='ex';
+    li.innerHTML=`
+      <div class="ex-top">
+        <span class="idx num">${String(i+1).padStart(2,'0')}</span>
+        <div>
+          <div class="ex-name">${ex.n}</div>
+          <div class="meta-line"><span class="tech">${ex.tech}</span><span class="tgt">${ex.tgt}</span>
+            <button class="info-btn" aria-label="Show cue" data-info="${ex.id}">i</button></div>
+        </div>
+      </div>
+      <p class="ex-note" id="note-${ex.id}" hidden>${ex.note}</p>
+      <div class="sets">
+        <div class="shead"><span>Set</span><span>Prev</span><span>kg</span><span>Reps</span><span>✓</span></div>
+        <div class="srows" id="rows-${ex.id}"></div>
+        <div class="setbtns">
+          <button class="addset" data-add="${ex.id}">+ Set</button>
+          <button class="addset" data-addfin="${ex.id}">+ Finisher</button>
+          <button class="addset rem" data-del="${ex.id}">− Last</button>
+        </div>
+      </div>`;
+    listEl.appendChild(li);
+    renderRows(ex, sets);
+    syncDelBtn(ex.id, sets);
+  });
+  updateVolume();
+}
+function syncDelBtn(exId, arr){
+  const b=listEl.querySelector(`[data-del="${exId}"]`);
+  if(b) b.disabled = arr.length<=1;
+}
+
+function renderRows(ex, sets){
+  const host=document.getElementById('rows-'+ex.id);
+  host.innerHTML='';
+  sets.forEach((s,idx)=>{
+    const planned = ex.sets[idx];
+    const isWarm = planned ? planned.t==='W' : false;
+    const prev = (last[ex.id] && last[ex.id][idx]) ? `${last[ex.id][idx].w||'–'}×${last[ex.id][idx].r||'–'}` : '—';
+    let tagEl;
+    if(isWarm){ tagEl=`<span class="tag">W</span>`; }
+    else if(s.fin){ tagEl=`<button class="tag fin" data-fin="${ex.id}" data-i="${idx}" title="Tap to switch between finisher and working set">F</button>`; }
+    else { tagEl=`<button class="tag" data-fin="${ex.id}" data-i="${idx}" title="Tap to mark as finisher">${workingNumber(ex,sets,idx)}</button>`; }
+    const row=document.createElement('div');
+    row.className='srow'+(isWarm?' warm':'')+(s.done?' done':'');
+    row.innerHTML=`
+      ${tagEl}
+      <span class="prev num">${prev}</span>
+      <input class="num" inputmode="decimal" aria-label="weight kg" value="${s.w??''}" data-f="w" data-ex="${ex.id}" data-i="${idx}">
+      <input class="num" inputmode="numeric" aria-label="reps" value="${s.r??''}" data-f="r" data-ex="${ex.id}" data-i="${idx}">
+      <button class="check" aria-label="Mark set done" aria-pressed="${s.done}" data-done="${ex.id}" data-i="${idx}">${CHECK_SVG}</button>`;
+    host.appendChild(row);
+  });
+}
+function workingNumber(ex,sets,idx){
+  let n=0;
+  for(let k=0;k<=idx;k++){ const p=ex.sets[k]; const warm=p&&p.t==='W'; if(!warm && !sets[k].fin) n++; }
+  return n;
+}
+
+/* ---------- interactions ---------- */
+listEl.addEventListener('input',e=>{
+  const t=e.target; if(t.dataset.f){
+    const arr=progFor(t.dataset.ex); const i=+t.dataset.i;
+    const val=t.value.trim()===''?null:parseFloat(t.value);
+    arr[i][t.dataset.f]=isNaN(val)?null:val;
+    saveProgress(); updateVolume();
+  }
+});
+listEl.addEventListener('click',e=>{
+  const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.info){
+    const n=document.getElementById('note-'+t.dataset.info); n.hidden=!n.hidden;
+  } else if(t.dataset.add){
+    const ex=routine().ex.find(x=>x.id===t.dataset.add); const arr=progFor(t.dataset.add);
+    const lastWork=[...arr].reverse().find((_,k)=>{const pi=arr.length-1-k;const p=ex.sets[pi];return !p||p.t!=='W';});
+    arr.push({w:lastWork?lastWork.w:null, r:lastWork?lastWork.r:null, done:false});
+    saveProgress(); renderRows(ex,arr); syncDelBtn(ex.id,arr);
+  } else if(t.dataset.addfin){
+    const ex=routine().ex.find(x=>x.id===t.dataset.addfin); const arr=progFor(t.dataset.addfin);
+    const prev=arr[arr.length-1];
+    arr.push({w:prev?prev.w:null, r:null, done:false, fin:true});
+    saveProgress(); renderRows(ex,arr); syncDelBtn(ex.id,arr);
+  } else if(t.dataset.fin){
+    const ex=routine().ex.find(x=>x.id===t.dataset.fin); const arr=progFor(t.dataset.fin); const i=+t.dataset.i;
+    arr[i].fin=!arr[i].fin; saveProgress(); renderRows(ex,arr); updateVolume();
+  } else if(t.dataset.del){
+    const ex=routine().ex.find(x=>x.id===t.dataset.del); const arr=progFor(t.dataset.del);
+    if(arr.length>1){ arr.pop(); saveProgress(); renderRows(ex,arr); updateVolume(); syncDelBtn(ex.id,arr); }
+  } else if(t.dataset.done){
+    const ex=routine().ex.find(x=>x.id===t.dataset.done); const arr=progFor(t.dataset.done); const i=+t.dataset.i;
+    arr[i].done=!arr[i].done;
+    saveProgress(); renderRows(ex,arr); updateVolume();
+    if(arr[i].done){
+      const planned=ex.sets[i]; const next=arr[i+1];
+      if(next && next.fin){ startRest(REST.restpause,'Rest-pause — then finisher'); }
+      else if(planned && planned.t==='W'){ startRest(REST.warm,'Rest'); }
+      else { startRest(REST.work,'Rest'); }
+    }
+  }
+});
+
+function saveProgress(){ store.set('hit-progress', progress); }
+
+function updateVolume(){
+  let v=0;
+  routine().ex.forEach(ex=>{
+    const arr=progFor(ex.id);
+    arr.forEach((s,idx)=>{ const p=ex.sets[idx]; const warm=p&&p.t==='W';
+      if(s.done&&!warm&&s.w&&s.r) v+=s.w*s.r; });
+  });
+  document.getElementById('vol').textContent=v.toLocaleString();
+}
+
+/* ---------- tabs ---------- */
+function select(w){ current=w; store.set('hit-current',w); render(); window.scrollTo(0,0); }
+document.getElementById('tab-a').onclick=()=>select('a');
+document.getElementById('tab-b').onclick=()=>select('b');
+
+/* ---------- finish / reset ---------- */
+document.getElementById('finish').onclick=()=>{
+  // tally completed working sets before clearing
+  let vol=0, doneSets=0;
+  routine().ex.forEach(ex=>{
+    progFor(ex.id).forEach((s,idx)=>{ const p=ex.sets[idx]; const warm=p&&p.t==='W';
+      if(s.done&&!warm){ doneSets++; if(s.w&&s.r) vol+=s.w*s.r; } });
+    });
+  if(doneSets===0){
+    const msg=document.getElementById('lastdone');
+    msg.textContent='Nothing logged yet — tick some sets first.'; msg.hidden=false;
+    setTimeout(()=>{msg.hidden=true;},3000); return;
+  }
+  // carry loads forward
+  const snap={};
+  routine().ex.forEach(ex=>{ snap[ex.id]=progFor(ex.id).map(s=>({w:s.w,r:s.r})); });
+  last={...last,...snap};
+  store.set('hit-last',last);
+  // save to history
+  history.unshift({date:Date.now(), routine:current, title:routine().title, vol, sets:doneSets});
+  history=history.slice(0,60); store.set('hit-history',history);
+  // build cloud payload (one row per completed set) and sync
+  const rows=[];
+  routine().ex.forEach(ex=>{ const a=progFor(ex.id); a.forEach((s,idx)=>{
+    if(!s.done) return; const p=ex.sets[idx]; const warm=p&&p.t==='W';
+    rows.push({exercise:ex.n, set: warm?'W':(s.fin?'F':String(workingNumber(ex,a,idx))),
+      type: warm?'warmup':(s.fin?'finisher':'working'), weight:s.w||0, reps:s.r||0}); }); });
+  lastPayload={sessionDate:new Date().toISOString(), workout:routine().title, rows};
+  store.set('hit-lastpayload',lastPayload);
+  if(backupUrl()) sendBackup(lastPayload,'Session synced to sheet');
+  progress[current]={};
+  saveProgress();
+  const msg=document.getElementById('lastdone');
+  msg.textContent=`Saved — ${vol.toLocaleString()} kg over ${doneSets} sets. Loads carried to "Prev".`; msg.hidden=false;
+  stopRest(); render(); renderHistory();
+  setTimeout(()=>{msg.hidden=true;},4500);
+};
+document.getElementById('clearbtn').onclick=()=>{
+  progress[current]={}; saveProgress(); render();
+};
+
+/* ---------- rest timer ---------- */
+let endAt=0, tick=null, chimed=false, audioCtx=null;
+const timerEl=document.getElementById('timer'), countEl=document.getElementById('t-count'), labelEl=document.getElementById('t-label');
+function fmt(s){ s=Math.max(0,Math.round(s)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+function ensureAudio(){
+  try{
+    if(!audioCtx){ const AC=window.AudioContext||window.webkitAudioContext; if(AC) audioCtx=new AC(); }
+    if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();
+  }catch(e){}
+}
+function chime(){
+  try{
+    if(!audioCtx) return;
+    const now=audioCtx.currentTime;
+    [[880,0],[1174.7,0.18],[1567.98,0.36]].forEach(([f,t])=>{
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.type='sine'; o.frequency.value=f;
+      o.connect(g); g.connect(audioCtx.destination);
+      const s=now+t;
+      g.gain.setValueAtTime(0,s);
+      g.gain.linearRampToValueAtTime(0.35,s+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001,s+0.5);
+      o.start(s); o.stop(s+0.55);
+    });
+  }catch(e){}
+}
+function startRest(sec,label){ ensureAudio(); chimed=false; endAt=Date.now()+sec*1000; labelEl.textContent=label||'Rest'; timerEl.hidden=false; timerEl.classList.remove('done-flash'); runTick(); }
+function runTick(){ clearInterval(tick); paint(); tick=setInterval(paint,250); }
+function paint(){
+  const rem=(endAt-Date.now())/1000;
+  countEl.textContent=fmt(rem);
+  countEl.classList.toggle('low', rem<=10 && rem>0);
+  if(rem<=0){ clearInterval(tick); countEl.textContent='0:00'; labelEl.textContent='Rest done — go'; timerEl.classList.add('done-flash'); countEl.classList.remove('low');
+    if(!chimed){ chimed=true; chime(); try{navigator.vibrate&&navigator.vibrate([200,80,200]);}catch(e){} }
+    setTimeout(()=>{ if((endAt-Date.now())/1000<=0) timerEl.hidden=true; },4000);
+  }
+}
+function stopRest(){ clearInterval(tick); timerEl.hidden=true; }
+document.getElementById('t-plus').onclick=()=>{ ensureAudio(); endAt+=15000; if((endAt-Date.now())>0) chimed=false; if(timerEl.hidden){timerEl.hidden=false;} timerEl.classList.remove('done-flash'); labelEl.textContent='Rest'; runTick(); };
+document.getElementById('t-minus').onclick=()=>{ endAt-=15000; timerEl.classList.remove('done-flash'); runTick(); };
+document.getElementById('t-skip').onclick=stopRest;
+
+/* ---------- history ---------- */
+const histList=document.getElementById('hist-list'), histCount=document.getElementById('hist-count'), histClear=document.getElementById('hist-clear');
+function renderHistory(){
+  histCount.textContent = history.length ? '· '+history.length : '';
+  if(!history.length){ histList.innerHTML='<p class="h-empty">No saved sessions yet. Tick your sets and hit <b>Finish &amp; save</b> to start logging.</p>'; histClear.hidden=true; return; }
+  histClear.hidden=false;
+  const max=Math.max(...history.map(h=>h.vol),1);
+  histList.innerHTML='';
+  history.forEach(h=>{
+    const d=new Date(h.date);
+    const day=d.toLocaleDateString(undefined,{day:'2-digit',month:'short'});
+    const yr=d.toLocaleDateString(undefined,{weekday:'short'});
+    const ab=h.routine==='a'?'A':'B';
+    const row=document.createElement('div'); row.className='h-row';
+    row.innerHTML=`
+      <div class="h-date">${yr}<b>${day}</b></div>
+      <div class="h-bar-wrap">
+        <div class="h-wk"><span class="ab">${ab}</span>${h.title}</div>
+        <div class="h-bar"><i style="width:${Math.round(h.vol/max*100)}%"></i></div>
+      </div>
+      <div class="h-vol"><span class="v num">${h.vol.toLocaleString()}</span><span class="s">kg · ${h.sets} sets</span></div>`;
+    histList.appendChild(row);
+  });
+}
+histClear.onclick=()=>{ history=[]; store.set('hit-history',history); renderHistory(); };
+makeAccordion('hist-toggle','hist-body');
+
+/* ---------- cloud backup ---------- */
+const DEFAULT_BACKUP_URL='';
+function backupUrl(){ return (store.get('hit-backup-url', DEFAULT_BACKUP_URL)||'').trim(); }
+const cloudUrlEl=document.getElementById('cloud-url'), cloudStateEl=document.getElementById('cloud-state'), cloudStatusEl=document.getElementById('cloud-status');
+function renderCloud(){ const u=backupUrl(); if(cloudUrlEl&&document.activeElement!==cloudUrlEl) cloudUrlEl.value=u; if(cloudStateEl) cloudStateEl.textContent=u?'· on':'· off'; }
+function sendBackup(payload, okMsg){
+  const url=backupUrl();
+  if(!url){ if(cloudStatusEl) cloudStatusEl.textContent='No backup URL set.'; return; }
+  if(cloudStatusEl) cloudStatusEl.textContent='Sending…';
+  try{
+    fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)})
+      .then(()=>{ if(cloudStatusEl) cloudStatusEl.textContent=(okMsg||'Sent')+' · '+new Date().toLocaleTimeString(); })
+      .catch(()=>{ if(cloudStatusEl) cloudStatusEl.textContent=(okMsg||'Sent')+' (sent — check your sheet to confirm)'; });
+  }catch(e){ if(cloudStatusEl) cloudStatusEl.textContent='Could not send: '+e; }
+}
+document.getElementById('cloud-save').onclick=()=>{ const v=(cloudUrlEl.value||'').trim(); store.set('hit-backup-url',v); renderCloud(); if(cloudStatusEl) cloudStatusEl.textContent=v?'Saved to this device.':'Cleared — backups off.'; };
+document.getElementById('cloud-test').onclick=()=>{ sendBackup({sessionDate:new Date().toISOString(), workout:'(test)', rows:[{exercise:'Connection test', set:'-', type:'test', weight:0, reps:0}]}, 'Test row sent'); };
+document.getElementById('cloud-resend').onclick=()=>{ if(lastPayload) sendBackup(lastPayload,'Re-sent last session'); else if(cloudStatusEl) cloudStatusEl.textContent='No saved session on this device yet.'; };
+makeAccordion('cloud-toggle','cloud-body');
+
+/* ---------- reference accordion ---------- */
+function makeAccordion(btnId,bodyId){
+  const b=document.getElementById(btnId), body=document.getElementById(bodyId);
+  b.onclick=()=>{ const open=body.hidden; body.hidden=!open; b.setAttribute('aria-expanded',String(open)); };
+}
+makeAccordion('ref-toggle','ref-body');
+
+render();
+renderHistory();
+renderCloud();
+</script>
+</body>
+</html>
