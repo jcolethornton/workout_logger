@@ -75,6 +75,7 @@
   button.tag{cursor:pointer}
   button.tag:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:5px}
   .srow .tag.fin{color:var(--accent);font-size:12px}
+  .srow .tag.rp{color:var(--accent);font-size:11px;border:1px solid var(--accent-soft);border-radius:4px;padding:1px 4px;line-height:1.1}
   .srow.warm .tag{color:var(--muted);font-size:11px}
   .prev{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center}
   .srow input{width:100%;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;text-align:center;padding:7px 2px;border:1px solid var(--field-line);border-radius:8px;background:var(--field);color:var(--fg);-moz-appearance:textfield}
@@ -187,13 +188,14 @@
       <span>Cloud backup <span class="hist-count num" id="cloud-state"></span></span><span class="chev">▾</span>
     </button>
     <div class="ref-body" id="cloud-body" hidden>
-      <p class="cloud-help">Each time you tap <b>Finish &amp; save</b>, that session's sets append as rows to your Google Sheet. The URL is stored on this device — paste it on any other device you log from.</p>
+      <p class="cloud-help">Each time you tap <b>Finish &amp; save</b>, that session's sets append as rows to your Google Sheet. The URL is stored on this device — paste it on any other device you log from. A new or cleared device pulls your history back automatically once the URL is set, or tap <b>Restore from sheet</b>.</p>
       <div class="cloud-row">
         <input id="cloud-url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/…/exec">
         <button class="save-url" id="cloud-save">Save</button>
       </div>
       <div class="cloud-actions">
         <button class="addset" id="cloud-test">Send test row</button>
+        <button class="addset" id="cloud-restore">Restore from sheet</button>
         <button class="addset" id="cloud-resend">Re-send last</button>
       </div>
       <p class="cloud-status" id="cloud-status"></p>
@@ -207,10 +209,10 @@
     <div class="ref-body" id="ref-body" hidden>
       <div class="glossary">
         <dl>
-          <div><dt>Rest between sets</dt><dd>Warm-ups: 45–60s. Working (failure) sets: 2–3 min. The timer auto-starts when you tick a set — warm-ups 60s, working sets 150s. If the next row is a finisher (F), it drops to a 20s rest-pause gap instead. Adjust with ±15s or skip.</dd></div>
-          <div><dt>Finisher sets</dt><dd>For rest-pause or drop sets: log your straight set at its true failure reps (e.g. 10), then tap <b>+ Finisher</b> to add an <b>F</b> row for the extra reps (e.g. 6) at the same weight. Keeps your working-set number clean for tracking while still counting the extra work. Tap any set number to flip it between working and F.</dd></div>
-          <div><dt>Rest-pause</dt><dd>Hit failure, rack it, breathe 15–20s, squeeze out 2–4 more at the same weight. Log those extra reps as a finisher (F) set.</dd></div>
-          <div><dt>Negatives</dt><dd>Lower the weight over 8–10s. Past failure, keep doing slow lowers for 2–3 more.</dd></div>
+          <div><dt>Rest between sets</dt><dd>Warm-ups: 45–60s. Working (failure) sets: 2–3 min. The timer auto-starts when you tick a set — warm-ups 60s, working sets 150s. If the next row is an RP set it drops to 15s, or a finisher (F) to 20s. Adjust with ±15s or skip.</dd></div>
+          <div><dt>RP &amp; finisher sets</dt><dd>After a set to failure, add a row for the bonus reps: <b>+ RP</b> for a rest-pause burst (15s timer before it) or <b>+ Fin</b> for a drop or slow-negative extension (20s). They log separately so your working-set number stays clean. Tap any set tag to cycle working → RP → F.</dd></div>
+          <div><dt>Rest-pause</dt><dd>Hit failure, rack it, breathe ~15s, squeeze out 2–4 more at the same weight; repeat once if you can. Add them as an <b>RP</b> set.</dd></div>
+          <div><dt>Slow negatives</dt><dd>Lower under control over 3–4s on <b>every</b> rep, from the first, taken to failure. Simpler and safer solo than past-failure negatives, and about as effective — just use a touch less weight. Keep it consistent each session so your numbers stay comparable.</dd></div>
           <div><dt>Static hold</dt><dd>At the hardest point, hold the contraction 10–20s after your last full rep.</dd></div>
           <div><dt>Pre-exhaust</dt><dd>Isolation move to failure, then straight into the compound with no rest. (Second machine taken? Rest-pause the single machine, or use the bodyweight finisher.)</dd></div>
           <div><dt>Technical failure</dt><dd>Barbell squat &amp; RDL only: stop when form slips — never grind a loaded bar past failure while training solo. No rest-pause or forced reps on these.</dd></div>
@@ -242,7 +244,7 @@ const ROUTINES = {
       sets:[{t:"W",w:30,r:8},{t:"W",w:45,r:5},{t:1,w:57,r:8},{t:2,w:57,r:8}]},
     {id:"a_squat", n:"Squat (Barbell)", tech:"Technical failure", tgt:"8–12 reps", note:"Stop when form breaks — NOT past failure. No rest-pause/forced reps on a loaded bar solo.",
       sets:[{t:"W",w:20,r:8},{t:"W",w:30,r:5},{t:1,w:40,r:10},{t:2,w:40,r:10}]},
-    {id:"a_legcurl", n:"Lying Leg Curl (Machine)", tech:"Negatives", tgt:"8–12 reps", note:"8–10s lowers past failure. Hips down.",
+    {id:"a_legcurl", n:"Lying Leg Curl (Machine)", tech:"Slow negative", tgt:"8–12 reps", note:"3–4s lowering on every rep, to failure. Hips down, smooth.",
       sets:[{t:"W",w:30,r:10},{t:1,w:50,r:10}]},
     {id:"a_ohp", n:"Seated Shoulder Press (Machine)", tech:"Rest-pause", tgt:"6–10 reps", note:"One all-out set, then a rest-pause burst.",
       sets:[{t:"W",w:20,r:8},{t:1,w:35,r:8}]},
@@ -250,7 +252,7 @@ const ROUTINES = {
       sets:[{t:1,w:12,r:12}]},
     {id:"a_tri", n:"Triceps Pushdown", tech:"Rest-pause", tgt:"8–12 reps", note:"Elbows pinned. Rest-pause for 2–4 extra.",
       sets:[{t:1,w:25,r:10}]},
-    {id:"a_curl", n:"EZ Bar Biceps Curl", tech:"Negatives", tgt:"8–12 reps", note:"No swing. Slow 6–8s lowers at failure.",
+    {id:"a_curl", n:"EZ Bar Biceps Curl", tech:"Slow negative", tgt:"8–12 reps", note:"3–4s lowering on every rep, to failure. No swinging.",
       sets:[{t:1,w:25,r:8}]},
     {id:"a_calf", n:"Standing Calf Raise (Machine)", tech:"Static hold", tgt:"10–15 reps", note:"Full stretch bottom; hold the top at failure.",
       sets:[{t:"W",w:60,r:12},{t:1,w:108,r:12}]},
@@ -274,7 +276,7 @@ const ROUTINES = {
       sets:[{t:1,w:12,r:12}]},
     {id:"b_shrug", n:"Shrug (Dumbbell)", tech:"Static hold", tgt:"10–15 reps", note:"Squeeze & hold the top; static hold on the last.",
       sets:[{t:1,w:48,r:12}]},
-    {id:"b_tri", n:"Overhead Triceps Ext. (Cable)", tech:"Negatives", tgt:"8–12 reps", note:"Elbows high and still. Slow lowers at failure.",
+    {id:"b_tri", n:"Overhead Triceps Ext. (Cable)", tech:"Slow negative", tgt:"8–12 reps", note:"Elbows high and still; 3–4s lowering on every rep, to failure.",
       sets:[{t:1,w:19,r:12}]},
     {id:"b_curl", n:"Rope Cable Curl", tech:"Rest-pause", tgt:"10–15 reps", note:"Spread the rope at the top. Rest-pause for extra.",
       sets:[{t:1,w:16,r:12}]},
@@ -284,7 +286,7 @@ const ROUTINES = {
       sets:[{t:1,w:0,r:15}]}
   ]}
 };
-const REST = { warm:60, work:150, restpause:20 };
+const REST = { warm:60, work:150, restpause:20, rp:15 };
 
 /* ---------- storage helpers (safe) ---------- */
 const store = {
@@ -338,7 +340,8 @@ function render(){
         <div class="srows" id="rows-${ex.id}"></div>
         <div class="setbtns">
           <button class="addset" data-add="${ex.id}">+ Set</button>
-          <button class="addset" data-addfin="${ex.id}">+ Finisher</button>
+          <button class="addset" data-addrp="${ex.id}">+ RP</button>
+          <button class="addset" data-addfin="${ex.id}">+ Fin</button>
           <button class="addset rem" data-del="${ex.id}">− Last</button>
         </div>
       </div>`;
@@ -362,8 +365,9 @@ function renderRows(ex, sets){
     const prev = (last[ex.id] && last[ex.id][idx]) ? `${last[ex.id][idx].w||'–'}×${last[ex.id][idx].r||'–'}` : '—';
     let tagEl;
     if(isWarm){ tagEl=`<span class="tag">W</span>`; }
-    else if(s.fin){ tagEl=`<button class="tag fin" data-fin="${ex.id}" data-i="${idx}" title="Tap to switch between finisher and working set">F</button>`; }
-    else { tagEl=`<button class="tag" data-fin="${ex.id}" data-i="${idx}" title="Tap to mark as finisher">${workingNumber(ex,sets,idx)}</button>`; }
+    else if(s.rp){ tagEl=`<button class="tag rp" data-cyc="${ex.id}" data-i="${idx}" title="Tap to cycle: working / RP / finisher">RP</button>`; }
+    else if(s.fin){ tagEl=`<button class="tag fin" data-cyc="${ex.id}" data-i="${idx}" title="Tap to cycle: working / RP / finisher">F</button>`; }
+    else { tagEl=`<button class="tag" data-cyc="${ex.id}" data-i="${idx}" title="Tap to cycle: working / RP / finisher">${workingNumber(ex,sets,idx)}</button>`; }
     const row=document.createElement('div');
     row.className='srow'+(isWarm?' warm':'')+(s.done?' done':'');
     row.innerHTML=`
@@ -377,19 +381,22 @@ function renderRows(ex, sets){
 }
 function workingNumber(ex,sets,idx){
   let n=0;
-  for(let k=0;k<=idx;k++){ const p=ex.sets[k]; const warm=p&&p.t==='W'; if(!warm && !sets[k].fin) n++; }
+  for(let k=0;k<=idx;k++){ const p=ex.sets[k]; const warm=p&&p.t==='W'; if(!warm && !sets[k].fin && !sets[k].rp) n++; }
   return n;
 }
 
 /* ---------- interactions ---------- */
-listEl.addEventListener('input',e=>{
+function onFieldEdit(e){
   const t=e.target; if(t.dataset.f){
     const arr=progFor(t.dataset.ex); const i=+t.dataset.i;
     const val=t.value.trim()===''?null:parseFloat(t.value);
     arr[i][t.dataset.f]=isNaN(val)?null:val;
     saveProgress(); updateVolume();
   }
-});
+}
+// capture on both: 'input' (live typing) and 'change'/blur (reliable on mobile keyboards that don't fire 'input')
+listEl.addEventListener('input',onFieldEdit);
+listEl.addEventListener('change',onFieldEdit);
 listEl.addEventListener('click',e=>{
   const t=e.target.closest('button'); if(!t) return;
   if(t.dataset.info){
@@ -404,9 +411,15 @@ listEl.addEventListener('click',e=>{
     const prev=arr[arr.length-1];
     arr.push({w:prev?prev.w:null, r:null, done:false, fin:true});
     saveProgress(); renderRows(ex,arr); syncDelBtn(ex.id,arr);
-  } else if(t.dataset.fin){
-    const ex=routine().ex.find(x=>x.id===t.dataset.fin); const arr=progFor(t.dataset.fin); const i=+t.dataset.i;
-    arr[i].fin=!arr[i].fin; saveProgress(); renderRows(ex,arr); updateVolume();
+  } else if(t.dataset.addrp){
+    const ex=routine().ex.find(x=>x.id===t.dataset.addrp); const arr=progFor(t.dataset.addrp);
+    const prev=arr[arr.length-1];
+    arr.push({w:prev?prev.w:null, r:null, done:false, rp:true});
+    saveProgress(); renderRows(ex,arr); syncDelBtn(ex.id,arr);
+  } else if(t.dataset.cyc){
+    const ex=routine().ex.find(x=>x.id===t.dataset.cyc); const arr=progFor(t.dataset.cyc); const i=+t.dataset.i; const s=arr[i];
+    if(s.rp){ s.rp=false; s.fin=true; } else if(s.fin){ s.fin=false; } else { s.rp=true; }
+    saveProgress(); renderRows(ex,arr); updateVolume();
   } else if(t.dataset.del){
     const ex=routine().ex.find(x=>x.id===t.dataset.del); const arr=progFor(t.dataset.del);
     if(arr.length>1){ arr.pop(); saveProgress(); renderRows(ex,arr); updateVolume(); syncDelBtn(ex.id,arr); }
@@ -416,7 +429,8 @@ listEl.addEventListener('click',e=>{
     saveProgress(); renderRows(ex,arr); updateVolume();
     if(arr[i].done){
       const planned=ex.sets[i]; const next=arr[i+1];
-      if(next && next.fin){ startRest(REST.restpause,'Rest-pause — then finisher'); }
+      if(next && next.rp){ startRest(REST.rp,'Rest-pause — then RP'); }
+      else if(next && next.fin){ startRest(REST.restpause,'Rest-pause — then finisher'); }
       else if(planned && planned.t==='W'){ startRest(REST.warm,'Rest'); }
       else { startRest(REST.work,'Rest'); }
     }
@@ -465,8 +479,8 @@ document.getElementById('finish').onclick=()=>{
   const rows=[];
   routine().ex.forEach(ex=>{ const a=progFor(ex.id); a.forEach((s,idx)=>{
     if(!s.done) return; const p=ex.sets[idx]; const warm=p&&p.t==='W';
-    rows.push({exercise:ex.n, set: warm?'W':(s.fin?'F':String(workingNumber(ex,a,idx))),
-      type: warm?'warmup':(s.fin?'finisher':'working'), weight:s.w||0, reps:s.r||0}); }); });
+    rows.push({exercise:ex.n, set: warm?'W':(s.rp?'RP':(s.fin?'F':String(workingNumber(ex,a,idx)))),
+      type: warm?'warmup':(s.rp?'rest-pause':(s.fin?'finisher':'working')), weight:s.w||0, reps:s.r||0}); }); });
   lastPayload={sessionDate:new Date().toISOString(), workout:routine().title, rows};
   store.set('hit-lastpayload',lastPayload);
   if(backupUrl()) sendBackup(lastPayload,'Session synced to sheet');
@@ -565,10 +579,48 @@ function sendBackup(payload, okMsg){
       .catch(()=>{ if(cloudStatusEl) cloudStatusEl.textContent=(okMsg||'Sent')+' (sent — check your sheet to confirm)'; });
   }catch(e){ if(cloudStatusEl) cloudStatusEl.textContent='Could not send: '+e; }
 }
-document.getElementById('cloud-save').onclick=()=>{ const v=(cloudUrlEl.value||'').trim(); store.set('hit-backup-url',v); renderCloud(); if(cloudStatusEl) cloudStatusEl.textContent=v?'Saved to this device.':'Cleared — backups off.'; };
+document.getElementById('cloud-save').onclick=()=>{ const v=(cloudUrlEl.value||'').trim(); store.set('hit-backup-url',v); renderCloud(); if(cloudStatusEl) cloudStatusEl.textContent=v?'Saved to this device.':'Cleared — backups off.'; if(v && history.length===0) restoreFromSheet(true); };
 document.getElementById('cloud-test').onclick=()=>{ sendBackup({sessionDate:new Date().toISOString(), workout:'(test)', rows:[{exercise:'Connection test', set:'-', type:'test', weight:0, reps:0}]}, 'Test row sent'); };
 document.getElementById('cloud-resend').onclick=()=>{ if(lastPayload) sendBackup(lastPayload,'Re-sent last session'); else if(cloudStatusEl) cloudStatusEl.textContent='No saved session on this device yet.'; };
 makeAccordion('cloud-toggle','cloud-body');
+
+/* ---------- two-way restore (reads the sheet via JSONP) ---------- */
+function applyRestore(data){
+  try{
+    const list=(data&&data.sessions)?data.sessions:[];
+    const sessions=list.map(s=>{
+      let vol=0,cnt=0; (s.rows||[]).forEach(r=>{ if(r.type!=='warmup'&&r.type!=='test'){ cnt++; vol+=(Number(r.weight)||0)*(Number(r.reps)||0); } });
+      return {date:Date.parse(s.date)||Date.now(), routine:(s.workout==='Workout B'?'b':'a'), title:s.workout, vol:vol, sets:cnt, _rows:s.rows||[]};
+    }).filter(s=>s.title==='Workout A'||s.title==='Workout B');
+    sessions.sort((a,b)=>b.date-a.date);
+    history=sessions.map(s=>({date:s.date,routine:s.routine,title:s.title,vol:s.vol,sets:s.sets})).slice(0,60);
+    store.set('hit-history',history);
+    const latest={}; sessions.forEach(s=>{ if(!latest[s.title]) latest[s.title]=s; });
+    ['Workout A','Workout B'].forEach(function(title){ const s=latest[title]; if(!s) return;
+      const rt=title==='Workout B'?'b':'a'; const n2i={}; ROUTINES[rt].ex.forEach(ex=>{n2i[ex.n]=ex.id;});
+      const byEx={}; s._rows.forEach(r=>{ const id=n2i[r.exercise]; if(!id) return; (byEx[id]=byEx[id]||[]).push({w:Number(r.weight)||0,r:Number(r.reps)||0}); });
+      Object.keys(byEx).forEach(id=>{ last[id]=byEx[id]; });
+    });
+    store.set('hit-last',last);
+    render(); renderHistory();
+    if(cloudStatusEl) cloudStatusEl.textContent='Restored '+history.length+' sessions from your sheet.';
+  }catch(e){ if(cloudStatusEl) cloudStatusEl.textContent='Restore failed to apply: '+e; }
+}
+let restoreBusy=false;
+function restoreFromSheet(auto){
+  const url=backupUrl(); if(!url){ if(cloudStatusEl&&!auto) cloudStatusEl.textContent='Set your Sheet URL first.'; return; }
+  if(restoreBusy) return; restoreBusy=true;
+  if(cloudStatusEl) cloudStatusEl.textContent='Restoring from sheet\u2026';
+  const cb='hitcb'+Date.now(); const sc=document.createElement('script'); let done=false;
+  const cleanup=()=>{ try{delete window[cb];}catch(e){window[cb]=undefined;} if(sc.parentNode) sc.parentNode.removeChild(sc); restoreBusy=false; };
+  window[cb]=function(data){ done=true; applyRestore(data); cleanup(); };
+  sc.onerror=()=>{ if(!done){ if(cloudStatusEl) cloudStatusEl.textContent='Could not reach the sheet \u2014 check the URL and that the script is deployed with GET access.'; cleanup(); } };
+  sc.src=url+(url.indexOf('?')>=0?'&':'?')+'action=history&callback='+cb+'&t='+Date.now();
+  document.body.appendChild(sc);
+  setTimeout(()=>{ if(!done){ if(cloudStatusEl) cloudStatusEl.textContent='Restore timed out \u2014 is the script redeployed?'; cleanup(); } },15000);
+}
+const cloudRestoreBtn=document.getElementById('cloud-restore');
+if(cloudRestoreBtn) cloudRestoreBtn.onclick=()=>restoreFromSheet(false);
 
 /* ---------- reference accordion ---------- */
 function makeAccordion(btnId,bodyId){
@@ -580,6 +632,7 @@ makeAccordion('ref-toggle','ref-body');
 render();
 renderHistory();
 renderCloud();
+if(backupUrl() && history.length===0){ restoreFromSheet(true); }
 </script>
 </body>
 </html>
