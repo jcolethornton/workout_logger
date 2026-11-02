@@ -144,6 +144,26 @@
   .glossary dd{margin:3px 0 0;font-size:13px;color:var(--muted)}
   .foot{margin-top:14px;font-size:11.5px;color:var(--muted)}
   @media (min-width:520px){.glossary dl{columns:2;column-gap:26px}.glossary div{break-inside:avoid}}
+  .nav-trends{width:100%;margin-top:10px;background:transparent;border:1px solid var(--line);color:var(--muted);font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-size:11.5px;padding:9px;border-radius:9px;cursor:pointer}
+  .nav-trends:active{transform:scale(.995)}
+  #trends-view{padding-top:4px}
+  .trends-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 2px}
+  .trends-title{font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;font-size:17px;font-weight:700}
+  .trends-sub{font-size:12.5px;color:var(--muted);margin:0 0 14px;line-height:1.45}
+  .tg{margin-bottom:18px}
+  .tg h3{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-size:12px;font-weight:600;color:var(--accent);margin:0 0 4px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .tex{padding:10px 0;border-bottom:1px solid var(--line)}
+  .tex:last-child{border-bottom:0}
+  .tex .row1{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .tex .nm{font-size:13px;font-weight:600;min-width:0}
+  .tex .val{white-space:nowrap}
+  .tex .cur{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;font-weight:600}
+  .tex .cur .u{color:var(--muted);font-weight:400;font-size:10.5px}
+  .tex .delta{font-size:11px;font-weight:600;margin-left:4px}
+  .tex .delta.up{color:var(--good)} .tex .delta.down{color:var(--accent)} .tex .delta.flat{color:var(--muted)}
+  .tex svg{display:block;width:100%;height:36px;overflow:visible}
+  .tex polyline{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .t-empty,.t-status{font-size:12.5px;color:var(--muted);padding:6px 2px}
 </style>
 </head>
 <body>
@@ -161,10 +181,16 @@
       <button role="tab" id="tab-a" aria-selected="true">Workout A<span class="mg">Press / Row / Squat</span></button>
       <button role="tab" id="tab-b" aria-selected="false">Workout B<span class="mg">Pre-exhaust / RDL</span></button>
     </div>
+    <button id="nav-trends" class="nav-trends">View progress trends</button>
   </div>
 </header>
 
 <div class="wrap">
+  <section id="trends-view" hidden>
+    <div class="trends-head"><h2 class="trends-title">Strength trends</h2><button id="trends-refresh" class="addset" style="max-width:110px">Refresh</button></div>
+    <p class="trends-sub">Best estimated 1RM per exercise each session, grouped by muscle. Reads from your Google Sheet.</p>
+    <div id="trends-body"></div>
+  </section>
   <ul class="list" id="list" aria-live="polite"></ul>
 
   <div class="actions">
@@ -239,19 +265,19 @@
 const ROUTINES = {
   a: { title:"Workout A", ex:[
     {id:"a_chestpress", n:"Chest Press (Machine)", tech:"Rest-pause set 2", tgt:"6–10 reps", note:"Two all-out sets; rest-pause the second.",
-      sets:[{t:"W",w:20,r:10},{t:"W",w:35,r:6},{t:1,w:50,r:8},{t:2,w:50,r:8}]},
+      sets:[{t:"W",w:20,r:10},{t:"W",w:35,r:6},{t:1,w:50,r:8},{t:2,w:50,r:8},{t:"RP",rp:true,w:50,r:4}]},
     {id:"a_row", n:"Seated Row (Machine)", tech:"Rest-pause set 2", tgt:"6–10 reps", note:"Drive elbows back, full squeeze.",
-      sets:[{t:"W",w:30,r:8},{t:"W",w:45,r:5},{t:1,w:57,r:8},{t:2,w:57,r:8}]},
+      sets:[{t:"W",w:30,r:8},{t:"W",w:45,r:5},{t:1,w:57,r:8},{t:2,w:57,r:8},{t:"RP",rp:true,w:57,r:4}]},
     {id:"a_squat", n:"Squat (Barbell)", tech:"Technical failure", tgt:"8–12 reps", note:"Stop when form breaks — NOT past failure. No rest-pause/forced reps on a loaded bar solo.",
       sets:[{t:"W",w:20,r:8},{t:"W",w:30,r:5},{t:1,w:40,r:10},{t:2,w:40,r:10}]},
     {id:"a_legcurl", n:"Lying Leg Curl (Machine)", tech:"Slow negative", tgt:"8–12 reps", note:"3–4s lowering on every rep, to failure. Hips down, smooth.",
       sets:[{t:"W",w:30,r:10},{t:1,w:50,r:10}]},
     {id:"a_ohp", n:"Seated Shoulder Press (Machine)", tech:"Rest-pause", tgt:"6–10 reps", note:"One all-out set, then a rest-pause burst.",
-      sets:[{t:"W",w:20,r:8},{t:1,w:35,r:8}]},
+      sets:[{t:"W",w:20,r:8},{t:1,w:35,r:8},{t:"RP",rp:true,w:35,r:4}]},
     {id:"a_lat", n:"Lateral Raise (Dumbbell)", tech:"Static hold", tgt:"10–15 reps", note:"Hold arms out at shoulder height 10–15s at failure.",
       sets:[{t:1,w:12,r:12}]},
     {id:"a_tri", n:"Triceps Pushdown", tech:"Rest-pause", tgt:"8–12 reps", note:"Elbows pinned. Rest-pause for 2–4 extra.",
-      sets:[{t:1,w:25,r:10}]},
+      sets:[{t:1,w:25,r:10},{t:"RP",rp:true,w:25,r:4}]},
     {id:"a_curl", n:"EZ Bar Biceps Curl", tech:"Slow negative", tgt:"8–12 reps", note:"3–4s lowering on every rep, to failure. No swinging.",
       sets:[{t:1,w:25,r:8}]},
     {id:"a_calf", n:"Standing Calf Raise (Machine)", tech:"Static hold", tgt:"10–15 reps", note:"Full stretch bottom; hold the top at failure.",
@@ -265,7 +291,7 @@ const ROUTINES = {
     {id:"b_chestpress", n:"Chest Press (Machine)", tech:"Pre-exhaust ② — no rest", tgt:"to failure", note:"Straight from the Pec Deck, press to failure.",
       sets:[{t:1,w:50,r:8}]},
     {id:"b_lat", n:"Lat Pulldown (Cable)", tech:"Rest-pause set 2", tgt:"6–10 reps", note:"Lead with elbows, no leaning back.",
-      sets:[{t:"W",w:30,r:8},{t:"W",w:45,r:5},{t:1,w:56,r:8},{t:2,w:56,r:8}]},
+      sets:[{t:"W",w:30,r:8},{t:"W",w:45,r:5},{t:1,w:56,r:8},{t:2,w:56,r:8},{t:"RP",rp:true,w:56,r:4}]},
     {id:"b_legext", n:"Leg Extension (Machine)", tech:"Pre-exhaust ①", tgt:"~12 → fail", note:"To failure (~12), then straight into Leg Press. Leg Press taken? Rest-pause here, or walking lunges after.",
       sets:[{t:"W",w:45,r:12},{t:"W",w:65,r:8},{t:1,w:88,r:12}]},
     {id:"b_legpress", n:"Leg Press (Machine)", tech:"Pre-exhaust ② — no rest", tgt:"to failure", note:"Straight from the Leg Extension, press to failure.",
@@ -279,7 +305,7 @@ const ROUTINES = {
     {id:"b_tri", n:"Overhead Triceps Ext. (Cable)", tech:"Slow negative", tgt:"8–12 reps", note:"Elbows high and still; 3–4s lowering on every rep, to failure.",
       sets:[{t:1,w:19,r:12}]},
     {id:"b_curl", n:"Rope Cable Curl", tech:"Rest-pause", tgt:"10–15 reps", note:"Spread the rope at the top. Rest-pause for extra.",
-      sets:[{t:1,w:16,r:12}]},
+      sets:[{t:1,w:16,r:12},{t:"RP",rp:true,w:16,r:4}]},
     {id:"b_calf", n:"Calf Press (Machine)", tech:"Static hold", tgt:"10–15 reps", note:"Deep stretch; full hold at the top at failure.",
       sets:[{t:"W",w:50,r:12},{t:1,w:85,r:12}]},
     {id:"b_crunch", n:"Crunch", tech:"Static hold", tgt:"to failure", note:"Hold the top squeeze on your final rep.",
@@ -307,7 +333,11 @@ function progFor(exId){
   const p = progress[current];
   if(!p[exId]){
     const ex = routine().ex.find(e=>e.id===exId);
-    p[exId] = ex.sets.map(s=>({w:(s.t!=='W' && last[exId] && last[exId][wIdx(ex,s)] )? last[exId][wIdx(ex,s)].w : s.w, r:s.r, done:false}));
+    p[exId] = ex.sets.map(s=>{
+      const o={ w:(s.t!=='W' && last[exId] && last[exId][wIdx(ex,s)]) ? last[exId][wIdx(ex,s)].w : s.w, r:s.r, done:false };
+      if(s.rp) o.rp=true; if(s.fin) o.fin=true;
+      return o;
+    });
   }
   return p[exId];
 }
@@ -628,6 +658,68 @@ function makeAccordion(btnId,bodyId){
   b.onclick=()=>{ const open=body.hidden; body.hidden=!open; b.setAttribute('aria-expanded',String(open)); };
 }
 makeAccordion('ref-toggle','ref-body');
+
+/* ---------- progress trends (by muscle group) ---------- */
+const GROUPS=[
+ ['Chest',['Chest Press (Machine)','Butterfly (Pec Deck)']],
+ ['Back',['Seated Row (Machine)','Lat Pulldown (Cable)','Shrug (Dumbbell)']],
+ ['Shoulders',['Seated Shoulder Press (Machine)','Lateral Raise (Dumbbell)']],
+ ['Arms',['Triceps Pushdown','EZ Bar Biceps Curl','Overhead Triceps Ext. (Cable)','Rope Cable Curl']],
+ ['Legs',['Squat (Barbell)','Lying Leg Curl (Machine)','Leg Extension (Machine)','Leg Press (Machine)','Romanian Deadlift (Barbell)']],
+ ['Calves',['Standing Calf Raise (Machine)','Calf Press (Machine)']],
+ ['Core',['Crunch']]
+];
+function tEsc(s){ return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+let trendsCache=null;
+function renderTrends(data){
+  const body=document.getElementById('trends-body');
+  const sessions=(data&&data.sessions)?data.sessions:[];
+  const perEx={};
+  sessions.forEach(function(s){ const t=Date.parse(s.date)||0; const best={};
+    (s.rows||[]).forEach(function(r){ if(r.type==='warmup'||r.type==='test') return; const w=Number(r.weight)||0, reps=Number(r.reps)||0; if(!w||!reps) return; const e=w*(1+reps/30); if(!(r.exercise in best)||e>best[r.exercise]) best[r.exercise]=e; });
+    Object.keys(best).forEach(function(nm){ (perEx[nm]=perEx[nm]||[]).push({date:t,e1rm:best[nm]}); });
+  });
+  Object.keys(perEx).forEach(function(nm){ perEx[nm].sort(function(a,b){return a.date-b.date;}); });
+  let html=''; let any=false;
+  GROUPS.forEach(function(pair){ const g=pair[0], names=pair[1];
+    const exes=names.filter(function(nm){ return perEx[nm]&&perEx[nm].length; });
+    if(!exes.length) return; any=true;
+    html+='<div class="tg"><h3>'+g+'</h3>';
+    exes.forEach(function(nm){ const ser=perEx[nm]; const vals=ser.map(function(p){return p.e1rm;});
+      const cur=vals[vals.length-1], first=vals[0], d=cur-first; let cls='flat', dtxt='\u2014';
+      if(ser.length>1 && Math.abs(d)>=0.1){ cls=d>0?'up':'down'; dtxt=(d>0?'+':'')+d.toFixed(1)+' kg'; }
+      let spark;
+      if(ser.length>1){ const mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals), rng=(mx-mn)||1;
+        const pts=ser.map(function(p,i){ return ((i/(ser.length-1))*100).toFixed(1)+','+(32-((p.e1rm-mn)/rng)*28).toFixed(1); }).join(' ');
+        spark='<svg viewBox="0 0 100 36" preserveAspectRatio="none"><polyline vector-effect="non-scaling-stroke" points="'+pts+'"></polyline></svg>';
+      } else { spark='<svg viewBox="0 0 100 36" preserveAspectRatio="none"><line x1="0" y1="18" x2="100" y2="18" stroke="var(--line)" vector-effect="non-scaling-stroke"></line></svg>'; }
+      html+='<div class="tex"><div class="row1"><span class="nm">'+tEsc(nm)+'</span><span class="val"><span class="cur">'+cur.toFixed(1)+'<span class="u"> kg e1RM</span></span> <span class="delta '+cls+'">'+dtxt+'</span></span></div>'+spark+'</div>';
+    });
+    html+='</div>';
+  });
+  if(!any) html='<p class="t-empty">No logged sessions found yet. Finish a workout with your Sheet URL set, then refresh.</p>';
+  body.innerHTML=html;
+}
+function loadTrends(force){
+  const body=document.getElementById('trends-body');
+  if(trendsCache && !force){ renderTrends(trendsCache); return; }
+  const url=backupUrl();
+  if(!url){ body.innerHTML='<p class="t-empty">Set your Sheet URL in Cloud backup first \u2014 trends read from your logged sessions.</p>'; return; }
+  body.innerHTML='<p class="t-status">Loading your sessions\u2026</p>';
+  const cb='hittr'+Date.now(); const sc=document.createElement('script'); let done=false;
+  const cleanup=function(){ try{delete window[cb];}catch(e){window[cb]=undefined;} if(sc.parentNode) sc.parentNode.removeChild(sc); };
+  window[cb]=function(data){ done=true; trendsCache=data; cleanup(); renderTrends(data); };
+  sc.onerror=function(){ if(!done){ body.innerHTML='<p class="t-empty">Could not reach the sheet \u2014 check the URL and deployment.</p>'; cleanup(); } };
+  sc.src=url+(url.indexOf('?')>=0?'&':'?')+'action=history&callback='+cb+'&t='+Date.now();
+  document.body.appendChild(sc);
+  setTimeout(function(){ if(!done){ body.innerHTML='<p class="t-empty">Timed out loading sessions.</p>'; cleanup(); } },15000);
+}
+const navTrends=document.getElementById('nav-trends'), trendsView=document.getElementById('trends-view');
+const logEls=[document.getElementById('list'), document.querySelector('.actions'), document.querySelector('.toggle'), document.querySelector('.hist'), document.querySelector('.cloud'), document.querySelector('.ref')];
+let curView='log';
+function setView(v){ curView=v; const t=(v==='trends'); logEls.forEach(function(el){ if(el) el.hidden=t; }); trendsView.hidden=!t; navTrends.textContent=t?'\u2190 Back to log':'View progress trends'; if(t) loadTrends(false); window.scrollTo(0,0); }
+navTrends.onclick=function(){ setView(curView==='trends'?'log':'trends'); };
+document.getElementById('trends-refresh').onclick=function(){ loadTrends(true); };
 
 render();
 renderHistory();
